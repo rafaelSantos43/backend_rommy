@@ -6,28 +6,49 @@ import { expressMiddleware } from "@apollo/server/express4";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import { WebSocketServer } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
-import graphqlUploadExpress from "graphql-upload/graphqlUploadExpress.mjs";
 import Jwt from "jsonwebtoken";
 import cors from "cors";
 import { createServer } from "http";
-
+import fileUpload from "express-fileupload";
 import mongoDB from "./src/db/mongoDB.js";
 import resolvers from "./src/graphql/typeResolver.js";
 import typeDefs from "./src/graphql/typeDefs.js";
-//import upload from './src/storage/multerUp.js'
-import multer from "multer";
 import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 dotenv.config();
 mongoDB();
 
 const secretKey = "dahiana123";
-const port = process.env.PORT || 4001;
-
 const app = express();
 
 app.use(express.json());
 app.use(cors());
+app.use(fileUpload());
+app.use("/uploads", express.static("uploads"));
+
+app.post("/upload", function (req, res) {
+  if (!req.files || Object.keys(req.files).length === 0) {
+    return res.status(400).send("No files were uploaded.");
+  }
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const uploadedFile = req.files.sampleFile;
+  const uploadPath = path.join(__dirname, "uploads", uploadedFile.name);
+
+  uploadedFile.mv(uploadPath, function (err) {
+    if (err) {
+      return res.status(500).send(err);
+    }
+
+    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
+      uploadedFile.name
+    }`;
+    res.json({ imageUrl });
+  });
+});
 
 app.use((req, res, next) => {
   const token = req.headers.token;
@@ -82,8 +103,8 @@ const serverStart = async () => {
   );
 };
 
-const PORT = 4000;
-// Ahora que el servidor HTTP está completamente configurado, podemos escucharlo.
+const PORT = process.env.PORT || 4001;
+
 httpServer.listen(PORT, () => {
   console.log(`El servidor se ejecuta en http://localhost:${PORT}/graphql`);
   console.log(
@@ -92,6 +113,7 @@ httpServer.listen(PORT, () => {
 });
 
 serverStart();
+
 /*function generateToken(user) {
   const payload = {
     id: user.id,

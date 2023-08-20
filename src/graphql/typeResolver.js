@@ -6,19 +6,23 @@ import fs, { createReadStream } from "fs";
 import path from "path";
 import fetch from "node-fetch";
 import multer from "multer";
+
 //const { ObjectId } = require("mongoose").Types;
 import { PubSub, withFilter } from "graphql-subscriptions";
 
 const pubSub = new PubSub();
 
+
+
 const resolvers = {
+
   Query: {
     GetUserAll: async (_, { id }) => {
       //console.log('mi id--->',id);
       try {
         const users = await User.find();
         const myUsers = users.filter((user) => !user._id.equals(id));
-        console.log("------>", myUsers);
+       // console.log("------>", myUsers);
         return myUsers;
       } catch (error) {
         console.warn("Error al traer la lista", error.message);
@@ -106,25 +110,24 @@ const resolvers = {
         throw new Error("Error al actualizar el usuario", error.message);
       }
     },
-
+    
     CreatePost: async (_, { input }) => {
-      // Crear el middleware de Multer
-
-      try {
+    try {
         const newPost = new Posts({
           title: input.title,
           content: input.content,
+          imageUrl: input.imageUrl,
           author: {
             id: input.author.id,
             name: input.author.name,
-            avatar: input.author.avatar,
+            avatar: input?.author?.avatar,
           },
         });
 
         await newPost.save();
-        return newPost;
+        return  newPost ;
       } catch (error) {
-        console.log("error al crear el post", error.message);
+        throw new ApolloError("Error al crear el post:", error);
       }
     },
 

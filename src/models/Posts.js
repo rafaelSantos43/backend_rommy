@@ -16,6 +16,10 @@ const postsSchema = new mongoose.Schema(
       ref: "User",
     },
 
+    imageUrl: {
+      type : String
+    },
+
     comments: [
       {
         type: mongoose.Schema.Types.ObjectId,

@@ -1,6 +1,6 @@
 const typeDefs = `
   directive @hasRole(roles: [String!]!) on FIELD_DEFINITION
-  scalar Upload
+
   
   type User {
     id: ID
@@ -24,6 +24,7 @@ const typeDefs = `
     title: String
     content: String
     author: User 
+    imageUrl: String
     comments: [Comment!]
     createdAt: String
     updatedAt: String
@@ -81,6 +82,7 @@ const typeDefs = `
     title: String
     content: String
     author: Author
+    imageUrl: String
     createdAt: String
     updatedAt: String
   }
