@@ -32,7 +32,7 @@ const typeDefs = `
   }
 
   type File {
-    filename : String
+    filename : String 
     mimetype : String
     encoding : String
   }
@@ -40,7 +40,8 @@ const typeDefs = `
   type Comment {
     id: ID
     content: String
-    author: User
+    author:  User
+    postId: String
     createdAt: String
     updatedAt: String
   }
@@ -91,7 +92,7 @@ const typeDefs = `
     content: String!
     postId: ID!
     author: ID!
-    createdAt: String
+    createdAt: String 
     updatedAt: String
   }
 
@@ -113,7 +114,7 @@ const typeDefs = `
   }
 
   type Subscription {
-    NewComment: Comment 
+    NewComment(postId: ID!): Comment
   }
 
 `;

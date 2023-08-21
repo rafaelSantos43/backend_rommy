@@ -6,23 +6,21 @@ import fs, { createReadStream } from "fs";
 import path from "path";
 import fetch from "node-fetch";
 import multer from "multer";
+import mongoose from "mongoose";
 
 //const { ObjectId } = require("mongoose").Types;
 import { PubSub, withFilter } from "graphql-subscriptions";
 
 const pubSub = new PubSub();
 
-
-
 const resolvers = {
-
   Query: {
     GetUserAll: async (_, { id }) => {
       //console.log('mi id--->',id);
       try {
         const users = await User.find();
         const myUsers = users.filter((user) => !user._id.equals(id));
-       // console.log("------>", myUsers);
+        // console.log("------>", myUsers);
         return myUsers;
       } catch (error) {
         console.warn("Error al traer la lista", error.message);
@@ -110,9 +108,9 @@ const resolvers = {
         throw new Error("Error al actualizar el usuario", error.message);
       }
     },
-    
+
     CreatePost: async (_, { input }) => {
-    try {
+      try {
         const newPost = new Posts({
           title: input.title,
           content: input.content,
@@ -125,7 +123,7 @@ const resolvers = {
         });
 
         await newPost.save();
-        return  newPost ;
+        return newPost;
       } catch (error) {
         throw new ApolloError("Error al crear el post:", error);
       }
@@ -133,7 +131,7 @@ const resolvers = {
 
     CreateComment: async (_, { input }) => {
       const post = await Posts.findById(input.postId);
-
+      console.log("hhhhhhhhh", input);
       if (!post) {
         throw new Error("Nose encontro el post");
       }
@@ -152,6 +150,7 @@ const resolvers = {
         console.log(post.comments);
 
         await post.save();
+       // const payload = { NewComment: newComment };
 
         pubSub.publish("New_Comment", newComment);
         return newComment;
@@ -160,16 +159,22 @@ const resolvers = {
         throw new Error("No se pudo crear el comentario.");
       }
     },
-  },
+  }, 
 
-  Subscription: {
+  Subscription: { 
     NewComment: {
       subscribe: withFilter(
         () => pubSub.asyncIterator("New_Comment"),
         (payload, variables) => {
-          return payload.NewComment.Comment === variables.commentValue;
+          console.log(payload, '-----a');
+          const postId = mongoose.Types.ObjectId(payload.postId); // Convertir a ObjectId
+          const requestedPostId = mongoose.Types.ObjectId(variables.postId);
+          return postId.equals(requestedPostId);
         }
       ),
+      resolve: (payload) => {
+        return payload; // Devolver la información del nuevo comentario
+      },
     },
   },
 };
