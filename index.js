@@ -16,11 +16,12 @@ import typeDefs from "./src/graphql/typeDefs.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import {parse,serialize} from 'cookie'
+import { handleUpload } from "./src/middleware/index.js";
 
-dotenv.config();
 mongoDB();
+dotenv.config();
 
-const secretKey = "dahiana123";
 const app = express();
 
 app.use(express.json());
@@ -28,41 +29,7 @@ app.use(cors());
 app.use(fileUpload());
 app.use("/uploads", express.static("uploads"));
 
-app.post("/upload", function (req, res) {
-  if (!req.files || Object.keys(req.files).length === 0) {
-    return res.status(400).send("No files were uploaded.");
-  }
-
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const uploadedFile = req.files.sampleFile;
-  const uploadPath = path.join(__dirname, "uploads", uploadedFile.name);
-
-  uploadedFile.mv(uploadPath, function (err) {
-    if (err) {
-      return res.status(500).send(err);
-    }
-
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
-      uploadedFile.name
-    }`;
-    res.json({ imageUrl });
-  });
-});
-
-app.use((req, res, next) => {
-  const token = req.headers.token;
-  if (token) {
-    try {
-      const decodedToken = Jwt.verify(token, secretKey);
-      req.user = decodedToken;
-    } catch (error) {
-      // Manejo del error de token inválido o expirado
-      console.error("Token inválido o expirado");
-    }
-  }
-  next();
-});
+app.post("/upload", handleUpload);
 
 const httpServer = createServer(app);
 
@@ -93,12 +60,30 @@ const wsServer = new WebSocketServer({
 const serverCleanUp = useServer({ schema }, wsServer);
 
 const serverStart = async () => {
-  await server.start();
+  await server.start()
   app.use(
     "/graphql",
     cors(),
     expressMiddleware(server, {
-      context: async ({ req }) => ({ token: req.headers.token }),
+      context: ({req}) => {    
+        const authHeader = req?.headers?.authorization
+        console.log(req.headers);
+        
+        if (!authHeader) {
+          console.error('No se proporcionó un token')
+          throw new Error('Token no proporcionado')
+        }
+        try {
+            const decodedToken = Jwt.verify(authHeader, process.env.SECRET_KEY)
+            req.user = decodedToken
+            console.log("token verificado");
+            
+            return {user: decodedToken}
+        } catch (error) {
+         console.error('Token inválido o expirado', error.message);
+          throw new Error('Token inválido o expirado');
+        }
+      },
     })
   );
 };
@@ -113,25 +98,4 @@ httpServer.listen(PORT, () => {
 });
 
 serverStart();
-
-/*function generateToken(user) {
-  const payload = {
-    id: user.id,
-    email: user.email,
-  }
-
-  const option = {
-   expiresInt: "1h",
-  }
-
-  return Jwt.sign(payload, secretKey, option)
-}*/
-
-/*function verifyToken(){ 
-  try {
-    const decode = jwt.verify(token, secretKey)
-    return decode
-  } catch (error) {
-    throw new Error('Token ivalido')
-  }
-}*/
+ 

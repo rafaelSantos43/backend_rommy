@@ -6,6 +6,7 @@ const typeDefs = `
     id: ID
     name : String
     email: String
+    dateOfBirth: String
     password: String
     avatar: String
     website:String
@@ -26,10 +27,13 @@ const typeDefs = `
     author: User 
     imageUrl: String
     comments: [Comment!]
+    commentCount: Int
     createdAt: String
     updatedAt: String
 
   }
+
+ 
 
   type File {
     filename : String 
@@ -54,6 +58,7 @@ const typeDefs = `
   input CreateUser {
     name: String!
     email: String!
+    dateOfBirth: String!
     password: String!
     avatar: String
     role: UserRole
@@ -65,20 +70,13 @@ const typeDefs = `
     _id: String
   }
 
-  type Query {
-    GetUsers(filter: User_filter):[User]! @hasRole(roles:["admin"])
-    GetUserAll(id:ID!): [User]! 
-    GetPosts: [Post]!
-    GetComments(postId:ID!): [Comment]
- 
-  }
-
+  
   input Author {
     id:ID
     name: String
     avatar: String
   }
-
+  
   input postCreate {
     title: String
     content: String
@@ -87,7 +85,7 @@ const typeDefs = `
     createdAt: String
     updatedAt: String
   }
-
+  
   input CommentCreate {
     content: String!
     postId: ID!
@@ -104,13 +102,32 @@ const typeDefs = `
     avartar: String
   }
 
+  type Friendship {
+    id: ID!
+    fromUser: User!
+    toUser: User!
+    status: String!
+  }
+
+
+
+  type Query {
+    GetUser(userId: ID!):[User] @hasRole(roles:["admin"])
+    GetUserAll: [User] 
+    GetPosts: [Post]!
+    GetComments(postId:ID!): [Comment]
+    CountComment(postId:ID!): Int
+    PendingFriendRequests: [Friendship]!
+  }
+
   type Mutation {
     CreateUser(input:CreateUser!): User!
     UpdateUser(id:ID!, name:String, email:String, password: String, avatar: String ): User
     Login(email: String!, password: String!): String!
-    CreatePost(input: postCreate!): Post
+    CreatePost(filter: postCreate!): Boolean
+    DeletePost(postId:ID!): Boolean
     CreateComment(input: CommentCreate!): Comment
-   
+    SendFriendRequest(toUserId: ID!): Friendship!
   }
 
   type Subscription {

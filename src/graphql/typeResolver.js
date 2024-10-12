@@ -2,28 +2,31 @@ import Comment from "../models/Comments.js";
 import User from "../models/User.js";
 import Posts from "../models/Posts.js";
 import Jwt from "jsonwebtoken";
-import fs, { createReadStream } from "fs";
-import path from "path";
-import fetch from "node-fetch";
-import multer from "multer";
 import mongoose from "mongoose";
 
 //const { ObjectId } = require("mongoose").Types;
 import { PubSub, withFilter } from "graphql-subscriptions";
+import Friendship from "../models/friendship.js";
 
 const pubSub = new PubSub();
 
 const resolvers = {
   Query: {
-    GetUserAll: async (_, { id }) => {
-      //console.log('mi id--->',id);
+    GetUserAll: async () => {
       try {
-        const users = await User.find();
-        const myUsers = users.filter((user) => !user._id.equals(id));
-        // console.log("------>", myUsers);
-        return myUsers;
+        return  await User.find()
       } catch (error) {
-        console.warn("Error al traer la lista", error.message);
+        console.warn("Error al traer la lista de usuarios", error.message);
+      }
+    },
+
+    GetUser: async (_, {userId}) => {
+      try {
+        const users = await User.find()
+        const userMe = users.filter((user) => user._id.equals(userId))
+        return userMe
+      } catch (error) {
+        console.warn("Error al traer al usuario", error.message);
       }
     },
 
@@ -47,16 +50,49 @@ const resolvers = {
         console.log("Error al traer los comentarios", error.message);
       }
     },
+
+    CountComment : async (_, {postId}) => {
+      try {
+        const quantityComment = await Comment.find({postId: postId})
+        console.log('------Z', quantityComment.length);
+        return  quantityComment.length
+      } catch (error) {
+        console.log("Error no hay comentarios en este post", error.message);
+      }
+   },
+
+    PendingFriendRequests: async (_, args, context) => {
+      if (!context.user.userId) {
+        throw new AuthenticationError('Debes iniciar sesión para acceder a tus solicitudes de amistad.');
+      }
+
+      try {
+        const pendingRequests = await Friendship.find({
+          toUser: context.user.userId,
+          status: 'pending',
+        }).populate('fromUser');
+        
+        console.log("......", pendingRequests); 
+        return pendingRequests;
+      } catch (error) {
+        console.error("Error al obtener las solicitudes pendientes:", error);
+        throw new ApolloError("No se pudieron obtener las solicitudes pendientes.", "INTERNAL_SERVER_ERROR");
+      }
+    },
   },
 
   Mutation: {
     CreateUser: async (_, { input }) => {
       // console.log("data user-->>>", input);
-      const user = new User({
-        ...input,
-      });
-      await user.save();
-      return user;
+      try {
+        const user = new User({
+          ...input,
+        });
+        await user.save();
+        return user;
+      } catch (error) {
+        throw new ApolloError("Error al crear el usuario.:", error);
+      }
     },
 
     Login: async (_, { email, password }) => {
@@ -77,10 +113,9 @@ const resolvers = {
           role: user.role,
           avatar: user.avatar,
         },
-        "secret123",
-        { expiresIn: "1h" }
+        process.env.SECRET_KEY,
+        { expiresIn: "2h" }
       );
-
       return token;
     },
 
@@ -109,24 +144,42 @@ const resolvers = {
       }
     },
 
-    CreatePost: async (_, { input }) => {
+    CreatePost: async (_, { filter }) => {
       try {
         const newPost = new Posts({
-          title: input.title,
-          content: input.content,
-          imageUrl: input.imageUrl,
+          title: filter.title,
+          content: filter.content,
+          imageUrl: filter.imageUrl,
           author: {
-            id: input.author.id,
-            name: input.author.name,
-            avatar: input?.author?.avatar,
+            id: filter.author.id,
+            name: filter.author.name,
+            avatar: filter?.author?.avatar,
           },
         });
 
         await newPost.save();
-        return newPost;
+        return true
       } catch (error) {
         throw new ApolloError("Error al crear el post:", error);
       }
+    },
+
+    DeletePost : async (_,{postId}, context) => {
+      
+      console.log('---->', context);
+      try {
+        const elpos = await Posts.findById(postId).exec()
+        
+        if ( context.user &&  elpos.author.id === context.user.userId) {
+          await Posts.deleteOne({_id : postId})
+          return true
+        }else{
+          return false
+        }
+      } catch (error) {
+        throw new Error('error al eliminar el post')
+      }
+
     },
 
     CreateComment: async (_, { input }) => {
@@ -150,7 +203,7 @@ const resolvers = {
         console.log(post.comments);
 
         await post.save();
-       // const payload = { NewComment: newComment };
+        // const payload = { NewComment: newComment };
 
         pubSub.publish("New_Comment", newComment);
         return newComment;
@@ -159,21 +212,52 @@ const resolvers = {
         throw new Error("No se pudo crear el comentario.");
       }
     },
-  }, 
 
-  Subscription: { 
+   
+
+    SendFriendRequest: async (_, { toUserId }, context) => {
+      if (!context.user.userId) {
+        throw new AuthenticationError('Debes iniciar sesión para enviar solicitudes de amistad.');
+      }
+      const existingRequest = await Friendship.findOne({
+        fromUser: context.user.userId,
+        toUser: toUserId,
+      });
+      if (existingRequest) {
+        throw new ApolloError('Ya has enviado una solicitud de amistad a este usuario.');
+      }
+
+      try {
+        const newRequest = new Friendship({
+          fromUser: context.user.userId,
+          toUser: toUserId,
+          status: "pending",
+        });
+
+        await newRequest.save();
+        console.log(context.user.userId);
+       return newRequest;
+      } catch (error) {
+        console.error("Error al obtener :", error);
+        throw new Error("No se pudo enviar la solicitud de amistad.", error);
+      }
+    },
+  },
+
+  Subscription: {
     NewComment: {
       subscribe: withFilter(
         () => pubSub.asyncIterator("New_Comment"),
         (payload, variables) => {
-          console.log(payload, '-----a');
-          const postId = mongoose.Types.ObjectId(payload.postId); // Convertir a ObjectId
-          const requestedPostId = mongoose.Types.ObjectId(variables.postId);
+          const postId = mongoose.Types.ObjectId(payload?.postId); // Convertir a ObjectId
+          const requestedPostId = mongoose.Types.ObjectId(variables?.postId);
           return postId.equals(requestedPostId);
         }
       ),
       resolve: (payload) => {
-        return payload; // Devolver la información del nuevo comentario
+        if (payload.content) {
+          return payload; // Devolver la información del nuevo comentario
+        }
       },
     },
   },
