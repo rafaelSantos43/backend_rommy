@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Posts from "../models/Posts.js";
 import Jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import { ApolloError } from "apollo-server-express"
 
 //const { ObjectId } = require("mongoose").Types;
 import { PubSub, withFilter } from "graphql-subscriptions";
@@ -14,17 +15,17 @@ const resolvers = {
   Query: {
     GetUserAll: async () => {
       try {
-        return  await User.find()
+        return await User.find();
       } catch (error) {
         console.warn("Error al traer la lista de usuarios", error.message);
       }
     },
 
-    GetUser: async (_, {userId}) => {
+    GetUser: async (_, { userId }) => {
       try {
-        const users = await User.find()
-        const userMe = users.filter((user) => user._id.equals(userId))
-        return userMe
+        const users = await User.find();
+        const userMe = users.filter((user) => user._id.equals(userId));
+        return userMe;
       } catch (error) {
         console.warn("Error al traer al usuario", error.message);
       }
@@ -32,10 +33,9 @@ const resolvers = {
 
     GetPosts: async () => {
       try {
-        const allPost = await Posts.find();
-
-        allPost.sort((a, b) => b.createdAt - a.createdAt);
-        // console.log('mis posts--->', allPost);
+        const allPost = await Posts.find()
+          .populate("author")
+          .sort({ createdAt: -1 });
         return allPost;
       } catch (error) {
         console.log("Error al traer los post", error.message);
@@ -44,39 +44,44 @@ const resolvers = {
 
     GetComments: async (_, { postId }) => {
       try {
-        const allComments = await Comment.find({ postId }).populate("author");
+        const allComments = await Comment.find({ postId });
         return allComments;
       } catch (error) {
         console.log("Error al traer los comentarios", error.message);
       }
     },
 
-    CountComment : async (_, {postId}) => {
+    CommentsCount: async (_, { postId }) => {
       try {
-        const quantityComment = await Comment.find({postId: postId})
-        console.log('------Z', quantityComment.length);
-        return  quantityComment.length
+        const quantityComment = await Comment.find({ postId: postId });
+        console.log("------Z", quantityComment.length);
+        return quantityComment.length
       } catch (error) {
         console.log("Error no hay comentarios en este post", error.message);
       }
-   },
+    },
 
     PendingFriendRequests: async (_, args, context) => {
       if (!context.user.userId) {
-        throw new AuthenticationError('Debes iniciar sesión para acceder a tus solicitudes de amistad.');
+        throw new AuthenticationError(
+          "Debes iniciar sesión para acceder a tus solicitudes de amistad."
+        );
       }
 
       try {
         const pendingRequests = await Friendship.find({
           toUser: context.user.userId,
-          status: 'pending',
-        }).populate('fromUser');
-        
-        console.log("......", pendingRequests); 
+          status: "pending",
+        }).populate("fromUser");
+
+        console.log("......", pendingRequests);
         return pendingRequests;
       } catch (error) {
         console.error("Error al obtener las solicitudes pendientes:", error);
-        throw new ApolloError("No se pudieron obtener las solicitudes pendientes.", "INTERNAL_SERVER_ERROR");
+        throw new ApolloError(
+          "No se pudieron obtener las solicitudes pendientes.",
+          "INTERNAL_SERVER_ERROR"
+        );
       }
     },
   },
@@ -144,87 +149,142 @@ const resolvers = {
       }
     },
 
-    CreatePost: async (_, { filter }) => {
+    CreatePost: async (_, { filter }, {user}) => {
+      if (!mongoose.Types.ObjectId.isValid(user.id)) {
+        throw new ApolloError("ID de autor no es válido.");
+      }
+
       try {
         const newPost = new Posts({
           title: filter.title,
           content: filter.content,
-          imageUrl: filter.imageUrl,
-          author: {
-            id: filter.author.id,
-            name: filter.author.name,
-            avatar: filter?.author?.avatar,
-          },
+          imageUrl: filter.imageUrl || "",
+          author: user.id,
         });
 
-        await newPost.save();
-        return true
+        await newPost.save()
+        const populatedPost = await Posts.findById(newPost._id).populate(
+          "author",
+          "name"
+        )
+
+        return populatedPost;
       } catch (error) {
+        console.error("Error detalle:", error);
         throw new ApolloError("Error al crear el post:", error);
       }
     },
 
-    DeletePost : async (_,{postId}, context) => {
-      
-      console.log('---->', context);
+    DeletePost: async (_, { postId }, {user}) => {
+      console.log("---->", user);
       try {
-        const elpos = await Posts.findById(postId).exec()
-        
-        if ( context.user &&  elpos.author.id === context.user.userId) {
-          await Posts.deleteOne({_id : postId})
-          return true
-        }else{
-          return false
+        const existingPost = await Posts.findById(postId).exec();
+
+        if (user && existingPost.author.id === user.id) {
+          await Posts.deleteOne({ _id: postId });
+          return true;
+        } else {
+          return false;
         }
       } catch (error) {
-        throw new Error('error al eliminar el post')
+        throw new Error("error al eliminar el post");
       }
-
     },
 
-    CreateComment: async (_, { input }) => {
-      const post = await Posts.findById(input.postId);
-      console.log("hhhhhhhhh", input);
+    CreateComment: async (_, { filter }, {user}) => {
+      
+      const post = await Posts.findById(filter.postId);
+
       if (!post) {
         throw new Error("Nose encontro el post");
       }
 
       try {
         const newComment = new Comment({
-          content: input.content,
-          author: input.author,
-          postId: input.postId,
-        });
+          content: filter.content,
+          authorId: user.id,
+          postId: filter.postId,
+        })
 
         await newComment.save();
 
-        post.comments = post.comments.concat(newComment);
+        post.comments = post.comments.concat(newComment._id)
+        post.commentCount += 1 
 
-        console.log(post.comments);
-
-        await post.save();
-        // const payload = { NewComment: newComment };
-
-        pubSub.publish("New_Comment", newComment);
-        return newComment;
+        post.save() 
+       // pubSub.publish("New_Comment", newComment)
+        return newComment
       } catch (error) {
         console.log("Errror al crear el comentario!", error.message);
         throw new Error("No se pudo crear el comentario.");
       }
     },
 
-   
+    addLike: async (_, { postId }, { user }) => {
+      const post = await Posts.findById(postId);
+       
+      if (!postId) throw new Error("Post no encontrado");
+      if (!user) throw new Error("Usuario no authenticado");
+
+      try {
+        const userId = mongoose.Types.ObjectId(user.id)
+        
+        const alreadyLiked = post.likes.some(
+          (like) => like && mongoose.Types.ObjectId(like).equals(userId)
+        )
+
+        if (alreadyLiked) {
+         post.likes =  post.likes.filter(
+            (like) => !mongoose.Types.ObjectId(like).equals(userId)
+          )
+          
+        } else {
+          post.likes.push(user.id)
+        }
+
+        post.likeCount = post.likes.length
+
+        post.save()
+        return post
+        
+      } catch (error) {
+        console.error("Error detalle:", error);
+        throw new ApolloError("Error al dar like:", error);
+      }
+    },
+
+    removeLike: async (_, { postId }, { user }) => {
+      if (!user) throw new Error("Usuario no autenticato!");
+
+      const post = await Posts.findById(postId);
+
+      if (!post) throw new Error("pos no encontrado");
+
+      const likedIndex = post.likes.findIndex((like) => like.equals(user.id));
+      if (likedIndex === -1) throw new Error("no has dado megusta a este post");
+
+      post.likes.splice(likedIndex, 1);
+      post.likeCount = post.likes.length;
+
+      await post.save
+
+      return post;
+    },
 
     SendFriendRequest: async (_, { toUserId }, context) => {
       if (!context.user.userId) {
-        throw new AuthenticationError('Debes iniciar sesión para enviar solicitudes de amistad.');
+        throw new AuthenticationError(
+          "Debes iniciar sesión para enviar solicitudes de amistad."
+        );
       }
       const existingRequest = await Friendship.findOne({
         fromUser: context.user.userId,
         toUser: toUserId,
       });
       if (existingRequest) {
-        throw new ApolloError('Ya has enviado una solicitud de amistad a este usuario.');
+        throw new ApolloError(
+          "Ya has enviado una solicitud de amistad a este usuario."
+        );
       }
 
       try {
@@ -236,7 +296,7 @@ const resolvers = {
 
         await newRequest.save();
         console.log(context.user.userId);
-       return newRequest;
+        return newRequest;
       } catch (error) {
         console.error("Error al obtener :", error);
         throw new Error("No se pudo enviar la solicitud de amistad.", error);

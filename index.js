@@ -13,23 +13,24 @@ import fileUpload from "express-fileupload";
 import mongoDB from "./src/db/mongoDB.js";
 import resolvers from "./src/graphql/typeResolver.js";
 import typeDefs from "./src/graphql/typeDefs.js";
-import path from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-import {parse,serialize} from 'cookie'
 import { handleUpload } from "./src/middleware/index.js";
+import { upload } from "./src/middleware/upload.js";
 
 mongoDB();
 dotenv.config();
 
 const app = express();
 
+
+
+
 app.use(express.json());
 app.use(cors());
-app.use(fileUpload());
-app.use("/uploads", express.static("uploads"));
+// app.use(fileUpload());
 
-app.post("/upload", handleUpload);
+// app.use("/uploads", express.static("uploads"));
+
+// app.post("/upload", upload);
 
 const httpServer = createServer(app);
 
@@ -76,7 +77,7 @@ const serverStart = async () => {
         try {
             const decodedToken = Jwt.verify(authHeader, process.env.SECRET_KEY)
             req.user = decodedToken
-            console.log("token verificado");
+            console.log("token verificado", decodedToken);
             
             return {user: decodedToken}
         } catch (error) {

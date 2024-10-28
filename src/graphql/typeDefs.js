@@ -24,13 +24,14 @@ const typeDefs = `
     id: ID
     title: String
     content: String
-    author: User 
+    author: User
     imageUrl: String
     comments: [Comment!]
     commentCount: Int
+    likeCount: Int
+    likes: [ID]
     createdAt: String
     updatedAt: String
-
   }
 
  
@@ -70,17 +71,10 @@ const typeDefs = `
     _id: String
   }
 
-  
-  input Author {
-    id:ID
-    name: String
-    avatar: String
-  }
-  
   input postCreate {
     title: String
     content: String
-    author: Author
+    author: ID
     imageUrl: String
     createdAt: String
     updatedAt: String
@@ -88,8 +82,8 @@ const typeDefs = `
   
   input CommentCreate {
     content: String!
+    author: ID
     postId: ID!
-    author: ID!
     createdAt: String 
     updatedAt: String
   }
@@ -116,7 +110,7 @@ const typeDefs = `
     GetUserAll: [User] 
     GetPosts: [Post]!
     GetComments(postId:ID!): [Comment]
-    CountComment(postId:ID!): Int
+    CommentsCount(postId:ID!): Int
     PendingFriendRequests: [Friendship]!
   }
 
@@ -124,9 +118,11 @@ const typeDefs = `
     CreateUser(input:CreateUser!): User!
     UpdateUser(id:ID!, name:String, email:String, password: String, avatar: String ): User
     Login(email: String!, password: String!): String!
-    CreatePost(filter: postCreate!): Boolean
+    CreatePost(filter: postCreate!): Post
     DeletePost(postId:ID!): Boolean
-    CreateComment(input: CommentCreate!): Comment
+    CreateComment(filter: CommentCreate!): Comment
+    addLike(postId:ID!): Post
+    removeLike(postId:ID!): Post
     SendFriendRequest(toUserId: ID!): Friendship!
   }
 

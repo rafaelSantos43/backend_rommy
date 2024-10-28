@@ -12,8 +12,9 @@ const postsSchema = new mongoose.Schema(
     },
 
     author: {
-      type: Object,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true
     },
 
     imageUrl: {
@@ -28,14 +29,33 @@ const postsSchema = new mongoose.Schema(
     ],
 
     commentCount : {
-      type : String
-    }
+      type : Number,
+      default:0,
+    },
+
+    likeCount: {
+      type: Number,
+      default: 0,
+    },
+
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
+    ]
   },
   {
     timestamps: true,
     versionKey: false,
   }
 );
+
+
+
+
+
+
 
 const Posts = mongoose.model("Post", postsSchema);
 
