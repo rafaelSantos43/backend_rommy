@@ -51,15 +51,20 @@ const resolvers = {
       }
     },
 
-    CommentsCount: async (_, { postId }) => {
+    GetListLike: async (_, { postId }, { user }) => {
+      const userInBd = await User.findById(user.id)
+      if (!userInBd) throw new Error('!No se encuentra el usuario¡')
+      const post = await Posts.findById(postId)
+      if (!post) throw new Error('!No se encuentra el Post asociado para darle like.¡')
       try {
-        const quantityComment = await Comment.find({ postId: postId });
-        console.log("------Z", quantityComment.length);
-        return quantityComment.length
+        const getListLike = await LikeList.find({ postId })
+        return getListLike
       } catch (error) {
-        console.log("Error no hay comentarios en este post", error.message);
+        console.error('Error al obtener la lista de likes:', error)
+        throw new ApolloError('No se pudieron obtener la lista de likes.', 'INTERNAL_SERVER_ERROR')
       }
     },
+
 
     PendingFriendRequests: async (_, args, context) => {
       if (!context.user.userId) {
@@ -206,13 +211,10 @@ const resolvers = {
           postId: filter.postId,
         })
 
-        await newComment.save();
-
-        post.comments = post.comments.concat(newComment._id)
-        post.commentCount += 1 
-
-        post.save() 
-       // pubSub.publish("New_Comment", newComment)
+        await newComment.save()
+        post.commentCount += 1
+        post.save()
+        // pubSub.publish("New_Comment", newComment)
         return newComment
       } catch (error) {
         console.log("Errror al crear el comentario!", error.message);
@@ -221,35 +223,58 @@ const resolvers = {
     },
 
     addLike: async (_, { postId }, { user }) => {
-      const post = await Posts.findById(postId);
-       
-      if (!postId) throw new Error("Post no encontrado");
-      if (!user) throw new Error("Usuario no authenticado");
-
+      const userInBd = await User.findById(user.id).lean()
+      if (!userInBd) throw new Error('Usuario no authenticado')
+      const post = await Posts.findById(postId)
+      if (!post) throw new Error('Post no encontrado')
       try {
-        const userId = mongoose.Types.ObjectId(user.id)
-        
-        const alreadyLiked = post.likes.some(
-          (like) => like && mongoose.Types.ObjectId(like).equals(userId)
-        )
-
-        if (alreadyLiked) {
-         post.likes =  post.likes.filter(
-            (like) => !mongoose.Types.ObjectId(like).equals(userId)
-          )
-          
+        const existingLike = await LikeList.findOne({
+          'author._id': userInBd._id,
+          postId,
+        })
+        if (existingLike) {
+          await LikeList.deleteOne({ _id: existingLike._id })
+          post.likeCount -= 1
+          await post.save()
+          return {
+            ...post,
+            author: {
+              id: userInBd._id.toString(),
+              name: userInBd.name,
+              avatar: userInBd.avatar,
+            },
+          }
         } else {
-          post.likes.push(user.id)
+          const newLike = new LikeList({
+            postId,
+            author: {
+              _id: userInBd._id,
+              name: userInBd.name,
+            },
+          })
+          await newLike.save()
+          post.likeCount += 1
+          await post.save()
+          console.log({
+            ...post,
+            author: {
+              id: userInBd._id.toString(),
+              name: userInBd.name,
+              avatar: userInBd.avatar,
+            },
+          })
+          return {
+            ...post,
+            author: {
+              id: userInBd._id.toString(),
+              name: userInBd.name,
+              avatar: userInBd.avatar,
+            },
+          }
         }
-
-        post.likeCount = post.likes.length
-
-        post.save()
-        return post
-        
       } catch (error) {
-        console.error("Error detalle:", error);
-        throw new ApolloError("Error al dar like:", error);
+        console.error('Error detalle:', error)
+        throw new ApolloError('Error al dar like:', error)
       }
     },
 

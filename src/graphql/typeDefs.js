@@ -26,10 +26,8 @@ const typeDefs = `
     content: String
     author: User
     imageUrl: String
-    comments: [Comment!]
+    likeCount: Int,
     commentCount: Int
-    likeCount: Int
-    likes: [ID]
     createdAt: String
     updatedAt: String
   }
@@ -105,12 +103,12 @@ const typeDefs = `
 
 
 
-  type Query {
+    type Query {
     GetUser(userId: ID!):[User] @hasRole(roles:["admin"])
     GetUserAll: [User] 
     GetPosts: [Post]!
     GetComments(postId:ID!): [Comment]
-    CommentsCount(postId:ID!): Int
+    GetListLike(postId:ID!): [User]
     PendingFriendRequests: [Friendship]!
   }
 
