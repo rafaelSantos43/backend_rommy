@@ -79,9 +79,9 @@ const typeDefs = `
   }
   
   input CommentCreate {
+    postId: ID!
     content: String!
     author: ID
-    postId: ID!
     createdAt: String 
     updatedAt: String
   }
@@ -92,6 +92,14 @@ const typeDefs = `
     email: String
     password: String
     avartar: String
+  }
+
+  type Like {
+    id: ID!
+    author: User! 
+    postId: ID!
+    createdAt: String
+    updatedAt: String
   }
 
   type Friendship {
@@ -108,7 +116,7 @@ const typeDefs = `
     GetUserAll: [User] 
     GetPosts: [Post]!
     GetComments(postId:ID!): [Comment]
-    GetListLike(postId:ID!): [User]
+    GetListLike(postId:ID!): [Like]
     PendingFriendRequests: [Friendship]!
   }
 

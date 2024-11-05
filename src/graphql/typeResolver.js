@@ -1,9 +1,11 @@
+import { ApolloError } from "apollo-server-express";
+import mongoose from "mongoose";
+import Jwt from "jsonwebtoken";
+
 import Comment from "../models/Comments.js";
 import User from "../models/User.js";
 import Posts from "../models/Posts.js";
-import Jwt from "jsonwebtoken";
-import mongoose from "mongoose";
-import { ApolloError } from "apollo-server-express"
+import LikeList from "../models/LikeList.js";
 
 //const { ObjectId } = require("mongoose").Types;
 import { PubSub, withFilter } from "graphql-subscriptions";
@@ -44,7 +46,7 @@ const resolvers = {
 
     GetComments: async (_, { postId }) => {
       try {
-        const allComments = await Comment.find({ postId });
+        const allComments = await Comment.find({ postId }).populate("author");
         return allComments;
       } catch (error) {
         console.log("Error al traer los comentarios", error.message);
@@ -52,19 +54,26 @@ const resolvers = {
     },
 
     GetListLike: async (_, { postId }, { user }) => {
-      const userInBd = await User.findById(user.id)
-      if (!userInBd) throw new Error('!No se encuentra el usuario¡')
-      const post = await Posts.findById(postId)
-      if (!post) throw new Error('!No se encuentra el Post asociado para darle like.¡')
+      const userInBd = await User.findById(user.id);
+      if (!userInBd) throw new Error("!No se encuentra el usuario¡");
+
+      const post = await Posts.findById(postId);
+      if (!post)
+        throw new Error("!No se encuentra el Post asociado para darle like.¡");
+
       try {
-        const getListLike = await LikeList.find({ postId })
-        return getListLike
+        const getListLike = await LikeList.find({ postId });
+        console.log(getListLike, "y esto");
+
+        return getListLike;
       } catch (error) {
-        console.error('Error al obtener la lista de likes:', error)
-        throw new ApolloError('No se pudieron obtener la lista de likes.', 'INTERNAL_SERVER_ERROR')
+        console.error("Error al obtener la lista de likes:", error);
+        throw new ApolloError(
+          "No se pudieron obtener la lista de likes.",
+          "INTERNAL_SERVER_ERROR"
+        );
       }
     },
-
 
     PendingFriendRequests: async (_, args, context) => {
       if (!context.user.userId) {
@@ -154,7 +163,7 @@ const resolvers = {
       }
     },
 
-    CreatePost: async (_, { filter }, {user}) => {
+    CreatePost: async (_, { filter }, { user }) => {
       if (!mongoose.Types.ObjectId.isValid(user.id)) {
         throw new ApolloError("ID de autor no es válido.");
       }
@@ -167,11 +176,11 @@ const resolvers = {
           author: user.id,
         });
 
-        await newPost.save()
+        await newPost.save();
         const populatedPost = await Posts.findById(newPost._id).populate(
           "author",
-          "name"
-        )
+          "name",
+        );
 
         return populatedPost;
       } catch (error) {
@@ -180,7 +189,7 @@ const resolvers = {
       }
     },
 
-    DeletePost: async (_, { postId }, {user}) => {
+    DeletePost: async (_, { postId }, { user }) => {
       console.log("---->", user);
       try {
         const existingPost = await Posts.findById(postId).exec();
@@ -196,8 +205,7 @@ const resolvers = {
       }
     },
 
-    CreateComment: async (_, { filter }, {user}) => {
-      
+    CreateComment: async (_, { filter }, { user }) => {
       const post = await Posts.findById(filter.postId);
 
       if (!post) {
@@ -207,15 +215,15 @@ const resolvers = {
       try {
         const newComment = new Comment({
           content: filter.content,
-          authorId: user.id,
+          author: user.id,
           postId: filter.postId,
-        })
-
-        await newComment.save()
-        post.commentCount += 1
-        post.save()
+        });
+        await newComment.save();
+        await newComment.populate("author");
+        post.commentCount += 1;
+        post.save();
         // pubSub.publish("New_Comment", newComment)
-        return newComment
+        return newComment;
       } catch (error) {
         console.log("Errror al crear el comentario!", error.message);
         throw new Error("No se pudo crear el comentario.");
@@ -223,58 +231,72 @@ const resolvers = {
     },
 
     addLike: async (_, { postId }, { user }) => {
-      const userInBd = await User.findById(user.id).lean()
-      if (!userInBd) throw new Error('Usuario no authenticado')
-      const post = await Posts.findById(postId)
-      if (!post) throw new Error('Post no encontrado')
+      const userInBd = await User.findById(user.id);
+      if (!userInBd) throw new Error("Usuario no authenticado");
+
+      const post = await Posts.findById(postId);
+      if (!post) throw new Error("Post no encontrado");
+
       try {
         const existingLike = await LikeList.findOne({
-          'author._id': userInBd._id,
+          "author._id": userInBd._id,
           postId,
-        })
+        });
+
         if (existingLike) {
-          await LikeList.deleteOne({ _id: existingLike._id })
-          post.likeCount -= 1
+          await LikeList.deleteOne({ _id: existingLike._id });
+          post.likeCount = await LikeList.countDocuments({ postId })
           await post.save()
-          return {
-            ...post,
-            author: {
-              id: userInBd._id.toString(),
-              name: userInBd.name,
-              avatar: userInBd.avatar,
-            },
-          }
+
+          // const postWithLikes = {
+          //   __typename: "Post",
+          //   id: post._id.toString(),
+          //   likeCount: post.likeCount,
+          //   postId: post._id.toString(),
+          //   author: {
+          //     __typename: "User",
+          //     id: userInBd._id.toString(),
+          //     name: userInBd.name,
+          //     avatar: userInBd.avatar || "",
+          //   },
+          // }
+
+          // return postWithLikes
         } else {
           const newLike = new LikeList({
             postId,
             author: {
               _id: userInBd._id,
               name: userInBd.name,
+              avatar: userInBd.avatar || "",
             },
-          })
-          await newLike.save()
-          post.likeCount += 1
+          });
+          await newLike.save();
+          post.likeCount = await LikeList.countDocuments({ postId })
+          console.log(post.likeCount,'pero si aqui esta bien')
           await post.save()
-          console.log({
-            ...post,
-            author: {
-              id: userInBd._id.toString(),
-              name: userInBd.name,
-              avatar: userInBd.avatar,
-            },
-          })
-          return {
-            ...post,
-            author: {
-              id: userInBd._id.toString(),
-              name: userInBd.name,
-              avatar: userInBd.avatar,
-            },
-          }
         }
+
+
+        const postWithLikes = {
+          __typename: "Post",
+          id: post._id.toString(),
+          likeCount: post.likeCount,
+          postId: post._id.toString(),
+          author: {
+            __typename: "User",
+            id: userInBd._id.toString(),
+            name: userInBd.name,
+            avatar: userInBd.avatar || "",
+          },
+        };
+
+        console.log(postWithLikes, "siiii", post.likeCount);
+
+        return postWithLikes;
       } catch (error) {
-        console.error('Error detalle:', error)
-        throw new ApolloError('Error al dar like:', error)
+        console.error("Error detalle:", error);
+        throw new ApolloError("Error al dar like:", error);
       }
     },
 
@@ -291,7 +313,7 @@ const resolvers = {
       post.likes.splice(likedIndex, 1);
       post.likeCount = post.likes.length;
 
-      await post.save
+      await post.save;
 
       return post;
     },
