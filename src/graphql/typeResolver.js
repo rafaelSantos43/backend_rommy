@@ -1,87 +1,90 @@
-import Comment from "../models/Comments.js";
-import User from "../models/User.js";
-import Posts from "../models/Posts.js";
-import Jwt from "jsonwebtoken";
-import mongoose from "mongoose";
-import { ApolloError } from "apollo-server-express"
+import { ApolloError } from 'apollo-server-express'
+import mongoose from 'mongoose'
+import Jwt from 'jsonwebtoken'
+
+import Comment from '../models/Comments.js'
+import User from '../models/User.js'
+import Posts from '../models/Posts.js'
+import LikeList from '../models/LikeList.js'
 
 //const { ObjectId } = require("mongoose").Types;
-import { PubSub, withFilter } from "graphql-subscriptions";
-import Friendship from "../models/friendship.js";
+import { PubSub, withFilter } from 'graphql-subscriptions'
+import Friendship from '../models/friendship.js'
 
-const pubSub = new PubSub();
+const pubSub = new PubSub()
 
 const resolvers = {
   Query: {
     GetUserAll: async () => {
       try {
-        return await User.find();
+        return await User.find()
       } catch (error) {
-        console.warn("Error al traer la lista de usuarios", error.message);
+        console.warn('Error al traer la lista de usuarios', error.message)
       }
     },
 
     GetUser: async (_, { userId }) => {
       try {
-        const users = await User.find();
-        const userMe = users.filter((user) => user._id.equals(userId));
-        return userMe;
+        const users = await User.find()
+        const userMe = users.filter((user) => user._id.equals(userId))
+        return userMe
       } catch (error) {
-        console.warn("Error al traer al usuario", error.message);
+        console.warn('Error al traer al usuario', error.message)
       }
     },
 
     GetPosts: async () => {
       try {
-        const allPost = await Posts.find()
-          .populate("author")
-          .sort({ createdAt: -1 });
-        return allPost;
+        const allPost = await Posts.find().populate('author').sort({ createdAt: -1 })
+        return allPost
       } catch (error) {
-        console.log("Error al traer los post", error.message);
+        console.log('Error al traer los post', error.message)
       }
     },
 
     GetComments: async (_, { postId }) => {
       try {
-        const allComments = await Comment.find({ postId });
-        return allComments;
+        const allComments = await Comment.find({ postId }).populate('author')
+        return allComments
       } catch (error) {
-        console.log("Error al traer los comentarios", error.message);
+        console.log('Error al traer los comentarios', error.message)
       }
     },
 
-    CommentsCount: async (_, { postId }) => {
+    GetListLike: async (_, { postId }, { user }) => {
+      const userInBd = await User.findById(user.id)
+      if (!userInBd) throw new Error('!No se encuentra el usuario¡')
+
+      const post = await Posts.findById(postId)
+      if (!post) throw new Error('!No se encuentra el Post asociado para darle like.¡')
+
       try {
-        const quantityComment = await Comment.find({ postId: postId });
-        console.log("------Z", quantityComment.length);
-        return quantityComment.length
+        const getListLike = await LikeList.find({ postId }).populate('author')
+        console.log(getListLike, 'y esto')
+
+        return getListLike
       } catch (error) {
-        console.log("Error no hay comentarios en este post", error.message);
+        console.error('Error al obtener la lista de likes:', error)
+        throw new ApolloError('No se pudieron obtener la lista de likes.', 'INTERNAL_SERVER_ERROR')
       }
     },
 
     PendingFriendRequests: async (_, args, context) => {
       if (!context.user.userId) {
-        throw new AuthenticationError(
-          "Debes iniciar sesión para acceder a tus solicitudes de amistad."
-        );
+        throw new AuthenticationError('Debes iniciar sesión para acceder a tus solicitudes de amistad.')
       }
 
       try {
         const pendingRequests = await Friendship.find({
           toUser: context.user.userId,
-          status: "pending",
-        }).populate("fromUser");
+          status: 'pending',
+        }).populate('fromUser')
 
-        console.log("......", pendingRequests);
-        return pendingRequests;
+        console.log('......', pendingRequests)
+        return pendingRequests
       } catch (error) {
-        console.error("Error al obtener las solicitudes pendientes:", error);
-        throw new ApolloError(
-          "No se pudieron obtener las solicitudes pendientes.",
-          "INTERNAL_SERVER_ERROR"
-        );
+        console.error('Error al obtener las solicitudes pendientes:', error)
+        throw new ApolloError('No se pudieron obtener las solicitudes pendientes.', 'INTERNAL_SERVER_ERROR')
       }
     },
   },
@@ -92,11 +95,11 @@ const resolvers = {
       try {
         const user = new User({
           ...input,
-        });
-        await user.save();
-        return user;
+        })
+        await user.save()
+        return user
       } catch (error) {
-        throw new ApolloError("Error al crear el usuario.:", error);
+        throw new ApolloError('Error al crear el usuario.:', error)
       }
     },
 
@@ -104,10 +107,10 @@ const resolvers = {
       const user = await User.findOne({
         email: email,
         password: password,
-      });
+      })
 
       if (!user) {
-        throw new Error("Credenciales invalidas");
+        throw new Error('Credenciales invalidas')
       }
 
       const token = Jwt.sign(
@@ -119,13 +122,13 @@ const resolvers = {
           avatar: user.avatar,
         },
         process.env.SECRET_KEY,
-        { expiresIn: "2h" }
-      );
-      return token;
+        { expiresIn: '2h' }
+      )
+      return token
     },
 
     UpdateUser: async (_, args) => {
-      const { id, name, email, password, avatar } = args;
+      const { id, name, email, password, avatar } = args
 
       try {
         const changeUser = await User.findByIdAndUpdate(
@@ -137,169 +140,189 @@ const resolvers = {
           {
             new: true,
           }
-        );
+        )
 
         if (!changeUser) {
-          throw new Error("el suaurio no exite");
+          throw new Error('el suaurio no exite')
         }
 
-        return changeUser;
+        return changeUser
       } catch (error) {
-        throw new Error("Error al actualizar el usuario", error.message);
+        throw new Error('Error al actualizar el usuario', error.message)
       }
     },
 
-    CreatePost: async (_, { filter }, {user}) => {
+    CreatePost: async (_, { filter }, { user }) => {
       if (!mongoose.Types.ObjectId.isValid(user.id)) {
-        throw new ApolloError("ID de autor no es válido.");
+        throw new ApolloError('ID de autor no es válido.')
       }
 
       try {
         const newPost = new Posts({
-          title: filter.title,
-          content: filter.content,
-          imageUrl: filter.imageUrl || "",
+          title: filter.title || '',
+          content: filter.content || '',
+          imageUrl: filter.imageUrl || '',
           author: user.id,
-        });
+        })
 
         await newPost.save()
-        const populatedPost = await Posts.findById(newPost._id).populate(
-          "author",
-          "name"
-        )
+        const populatedPost = await Posts.findById(newPost._id).populate('author', 'name')
 
-        return populatedPost;
+        return populatedPost
       } catch (error) {
-        console.error("Error detalle:", error);
-        throw new ApolloError("Error al crear el post:", error);
+        console.error('Error detalle:', error)
+        throw new ApolloError('Error al crear el post:', error)
       }
     },
 
-    DeletePost: async (_, { postId }, {user}) => {
-      console.log("---->", user);
+    DeletePost: async (_, { postId }, { user }) => {
+      console.log('---->', user)
       try {
-        const existingPost = await Posts.findById(postId).exec();
+        const existingPost = await Posts.findById(postId).exec()
 
         if (user && existingPost.author.id === user.id) {
-          await Posts.deleteOne({ _id: postId });
-          return true;
+          await Posts.deleteOne({ _id: postId })
+          return true
         } else {
-          return false;
+          return false
         }
       } catch (error) {
-        throw new Error("error al eliminar el post");
+        throw new Error('error al eliminar el post')
       }
     },
 
-    CreateComment: async (_, { filter }, {user}) => {
-      
-      const post = await Posts.findById(filter.postId);
+    CreateComment: async (_, { filter }, { user }) => {
+      const post = await Posts.findById(filter.postId)
 
       if (!post) {
-        throw new Error("Nose encontro el post");
+        throw new Error('Nose encontro el post')
       }
 
       try {
         const newComment = new Comment({
           content: filter.content,
-          authorId: user.id,
+          author: user.id,
           postId: filter.postId,
         })
-
-        await newComment.save();
-
-        post.comments = post.comments.concat(newComment._id)
-        post.commentCount += 1 
-
-        post.save() 
-       // pubSub.publish("New_Comment", newComment)
+        await newComment.save()
+        await newComment.populate('author')
+        post.commentCount += 1
+        post.save()
+        // pubSub.publish("New_Comment", newComment)
         return newComment
       } catch (error) {
-        console.log("Errror al crear el comentario!", error.message);
-        throw new Error("No se pudo crear el comentario.");
+        console.log('Errror al crear el comentario!', error.message)
+        throw new Error('No se pudo crear el comentario.')
       }
     },
 
     addLike: async (_, { postId }, { user }) => {
-      const post = await Posts.findById(postId);
-       
-      if (!postId) throw new Error("Post no encontrado");
-      if (!user) throw new Error("Usuario no authenticado");
+      const userInBd = await User.findById(user.id.toString())
+      if (!userInBd) throw new Error('Usuario no authenticado')
+
+      const post = await Posts.findById(postId.toString())
+      if (!post) throw new Error('Post no encontrado')
 
       try {
-        const userId = mongoose.Types.ObjectId(user.id)
-        
-        const alreadyLiked = post.likes.some(
-          (like) => like && mongoose.Types.ObjectId(like).equals(userId)
-        )
+        const existingLike = await LikeList.findOne({
+          author:userInBd._id.toString(),
+          postId,
+        })
 
-        if (alreadyLiked) {
-         post.likes =  post.likes.filter(
-            (like) => !mongoose.Types.ObjectId(like).equals(userId)
-          )
-          
+        if (existingLike) {
+          await LikeList.deleteOne({ _id: existingLike._id })
+          post.likeCount = Math.max(post.likeCount - 1, 0)
+          await post.save()
+          const postWithLikes = {
+            __typename: 'Post',
+            id: post._id.toString(),
+            likeCount: post.likeCount,
+            postId: post._id.toString(),
+            author: {
+              __typename: 'User',
+              id: userInBd._id.toString(),
+              name: userInBd.name,
+              avatar: userInBd.avatar || '',
+            },
+          }
+  
+          return postWithLikes
         } else {
-          post.likes.push(user.id)
+          const newLike = new LikeList({
+            postId,
+            author: {
+              _id: userInBd._id.toString(),
+              name: userInBd.name,
+              avatar: userInBd.avatar || '',
+            },
+          })
+          await newLike.save()
+          post.likeCount += 1
+          await post.save()
+        }
+        const postWithLikes = {
+          __typename: 'Post',
+          id: post._id.toString(),
+          likeCount: post.likeCount,
+          postId: post._id.toString(),
+          author: {
+            __typename: 'User',
+            id: userInBd._id.toString(),
+            name: userInBd.name,
+            avatar: userInBd.avatar || '',
+          },
         }
 
-        post.likeCount = post.likes.length
-
-        post.save()
-        return post
-        
+        return postWithLikes
       } catch (error) {
-        console.error("Error detalle:", error);
-        throw new ApolloError("Error al dar like:", error);
+        console.error('Error detalle:', error)
+        throw new ApolloError('Error al dar like:', error)
       }
     },
 
     removeLike: async (_, { postId }, { user }) => {
-      if (!user) throw new Error("Usuario no autenticato!");
+      if (!user) throw new Error('Usuario no autenticato!')
 
-      const post = await Posts.findById(postId);
+      const post = await Posts.findById(postId)
 
-      if (!post) throw new Error("pos no encontrado");
+      if (!post) throw new Error('pos no encontrado')
 
-      const likedIndex = post.likes.findIndex((like) => like.equals(user.id));
-      if (likedIndex === -1) throw new Error("no has dado megusta a este post");
+      const likedIndex = post.likes.findIndex((like) => like.equals(user.id))
+      if (likedIndex === -1) throw new Error('no has dado megusta a este post')
 
-      post.likes.splice(likedIndex, 1);
-      post.likeCount = post.likes.length;
+      post.likes.splice(likedIndex, 1)
+      post.likeCount = post.likes.length
 
       await post.save
 
-      return post;
+      return post
     },
 
     SendFriendRequest: async (_, { toUserId }, context) => {
       if (!context.user.userId) {
-        throw new AuthenticationError(
-          "Debes iniciar sesión para enviar solicitudes de amistad."
-        );
+        throw new AuthenticationError('Debes iniciar sesión para enviar solicitudes de amistad.')
       }
       const existingRequest = await Friendship.findOne({
         fromUser: context.user.userId,
         toUser: toUserId,
-      });
+      })
       if (existingRequest) {
-        throw new ApolloError(
-          "Ya has enviado una solicitud de amistad a este usuario."
-        );
+        throw new ApolloError('Ya has enviado una solicitud de amistad a este usuario.')
       }
 
       try {
         const newRequest = new Friendship({
           fromUser: context.user.userId,
           toUser: toUserId,
-          status: "pending",
-        });
+          status: 'pending',
+        })
 
-        await newRequest.save();
-        console.log(context.user.userId);
-        return newRequest;
+        await newRequest.save()
+        console.log(context.user.userId)
+        return newRequest
       } catch (error) {
-        console.error("Error al obtener :", error);
-        throw new Error("No se pudo enviar la solicitud de amistad.", error);
+        console.error('Error al obtener :', error)
+        throw new Error('No se pudo enviar la solicitud de amistad.', error)
       }
     },
   },
@@ -307,20 +330,20 @@ const resolvers = {
   Subscription: {
     NewComment: {
       subscribe: withFilter(
-        () => pubSub.asyncIterator("New_Comment"),
+        () => pubSub.asyncIterator('New_Comment'),
         (payload, variables) => {
-          const postId = mongoose.Types.ObjectId(payload?.postId); // Convertir a ObjectId
-          const requestedPostId = mongoose.Types.ObjectId(variables?.postId);
-          return postId.equals(requestedPostId);
+          const postId = mongoose.Types.ObjectId(payload?.postId) // Convertir a ObjectId
+          const requestedPostId = mongoose.Types.ObjectId(variables?.postId)
+          return postId.equals(requestedPostId)
         }
       ),
       resolve: (payload) => {
         if (payload.content) {
-          return payload; // Devolver la información del nuevo comentario
+          return payload // Devolver la información del nuevo comentario
         }
       },
     },
   },
-};
+}
 
-export default resolvers;
+export default resolvers

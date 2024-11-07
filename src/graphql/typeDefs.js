@@ -26,10 +26,8 @@ const typeDefs = `
     content: String
     author: User
     imageUrl: String
-    comments: [Comment!]
+    likeCount: Int,
     commentCount: Int
-    likeCount: Int
-    likes: [ID]
     createdAt: String
     updatedAt: String
   }
@@ -81,9 +79,9 @@ const typeDefs = `
   }
   
   input CommentCreate {
+    postId: ID!
     content: String!
     author: ID
-    postId: ID!
     createdAt: String 
     updatedAt: String
   }
@@ -96,6 +94,14 @@ const typeDefs = `
     avartar: String
   }
 
+  type Like {
+    id: ID!
+    author: User! 
+    postId: ID!
+    createdAt: String
+    updatedAt: String
+  }
+
   type Friendship {
     id: ID!
     fromUser: User!
@@ -105,12 +111,12 @@ const typeDefs = `
 
 
 
-  type Query {
+    type Query {
     GetUser(userId: ID!):[User] @hasRole(roles:["admin"])
     GetUserAll: [User] 
     GetPosts: [Post]!
     GetComments(postId:ID!): [Comment]
-    CommentsCount(postId:ID!): Int
+    GetListLike(postId:ID!): [Like]
     PendingFriendRequests: [Friendship]!
   }
 
