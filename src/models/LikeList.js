@@ -2,13 +2,8 @@ import mongoose from 'mongoose'
 const likeListSchema = new mongoose.Schema(
   {
     author: {
-      type: new mongoose.Schema({
-        _id: {
-          type: mongoose.Schema.Types.ObjectId,
-          required: true,
-        },
-        name: String,
-      }),
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User', 
       required: true,
     },
     postId: {
