@@ -9,22 +9,31 @@ const commentSchema = new mongoose.Schema(
 
     postId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Post',
-      required: true
+      ref: "Post",
+      required: true,
     },
 
-    author : {
+    author: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },  
+      ref: "User",
+      required: true,
+    },
+
+    imageUrl: {
+      type: String,
+    },
+    
+    likeCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
-    versionKey: false
+    versionKey: false,
   }
 );
 
-const Comment = mongoose.model('Comment', commentSchema);
+const Comment = mongoose.model("Comment", commentSchema);
 
-export default  Comment
+export default Comment;

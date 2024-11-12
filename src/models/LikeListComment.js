@@ -1,9 +1,9 @@
 import mongoose from 'mongoose'
-const likeListSchema = new mongoose.Schema(
+const likeListCommentSchema = new mongoose.Schema(
   {
-    postId: {
+    commentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Post',
+      ref: 'Comment',
       required: true,
     },
     author: {
@@ -17,5 +17,5 @@ const likeListSchema = new mongoose.Schema(
     versionKey: false,
   }
 )
-const LikeList = mongoose.model('LikeList', likeListSchema)
-export default LikeList
+const LikeListComment = mongoose.model('LikeListComment', likeListCommentSchema)
+export default LikeListComment

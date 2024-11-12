@@ -26,7 +26,7 @@ const typeDefs = `
     content: String
     author: User
     imageUrl: String
-    likeCount: Int,
+    likeCount: Int
     commentCount: Int
     createdAt: String
     updatedAt: String
@@ -45,6 +45,7 @@ const typeDefs = `
     content: String
     author:  User
     postId: String
+    likeCount: Int
     createdAt: String
     updatedAt: String
   }
@@ -94,6 +95,14 @@ const typeDefs = `
     avartar: String
   }
 
+  type LikeComment {
+    id: ID!
+    author: User! 
+    commentId: ID!
+    createdAt: String
+    updatedAt: String
+  }
+
   type Like {
     id: ID!
     author: User! 
@@ -115,8 +124,9 @@ const typeDefs = `
     GetUser(userId: ID!):[User] @hasRole(roles:["admin"])
     GetUserAll: [User] 
     GetPosts: [Post]!
-    GetComments(postId:ID!): [Comment]
     GetListLike(postId:ID!): [Like]
+    GetComments(postId:ID!): [Comment]
+    GetListLikeComment(commentId:ID!):[LikeComment]
     PendingFriendRequests: [Friendship]!
   }
 
@@ -127,7 +137,9 @@ const typeDefs = `
     CreatePost(filter: postCreate!): Post
     DeletePost(postId:ID!): Boolean
     CreateComment(filter: CommentCreate!): Comment
+    DeleteComment(commentId:ID!, postId:ID!): Boolean
     addLike(postId:ID!): Post
+    addLikeComment(commentId:ID!): Comment
     removeLike(postId:ID!): Post
     SendFriendRequest(toUserId: ID!): Friendship!
   }
