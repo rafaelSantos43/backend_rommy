@@ -97,8 +97,8 @@ const typeDefs = `
 
   type LikeComment {
     id: ID!
-    author: User! 
     commentId: ID!
+    author: User! 
     createdAt: String
     updatedAt: String
   }
@@ -127,6 +127,7 @@ const typeDefs = `
     GetListLike(postId:ID!): [Like]
     GetComments(postId:ID!): [Comment]
     GetListLikeComment(commentId:ID!):[LikeComment]
+    SearchUsers(query:String!): [User]
     PendingFriendRequests: [Friendship]!
   }
 

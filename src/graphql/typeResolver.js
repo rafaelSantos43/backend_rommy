@@ -97,6 +97,28 @@ const resolvers = {
       }
     },
 
+    SearchUsers: async (_, {query}, {user}) => {
+      try {
+        const userSearch = await User.find({
+          name: { $regex: query, $options: "i" },
+          _id: { $ne: user.id }
+        }).exec()
+
+        if (userSearch.length === 0) {
+          throw new Error("No se encontraron usuarios con ese nombre.");
+        }
+
+        return userSearch;
+      } catch (error) {
+        console.error("Error al obtener la busqueda :", error);
+        throw new ApolloError(
+          "No se pudieron obtener resultados de las busqueda.",
+          "INTERNAL_SERVER_ERROR"
+        );
+      }
+
+    },
+
     PendingFriendRequests: async (_, args, context) => {
       if (!context.user.userId) {
         throw new AuthenticationError(
